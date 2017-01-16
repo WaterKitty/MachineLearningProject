@@ -1,0 +1,89 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "M"
+date: "January 13, 2017"
+output: 
+  html_document: 
+    keep_md: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width = 15, warning=FALSE)
+```
+
+## Introduction
+This project is a part of the Practical Machine Learning Course by John Hopkins University on Coursera.
+
+## Executive Summary
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har.
+
+## Analysis
+
+```{r Libraries}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(randomForest)
+library(plyr)
+library(survival)
+library(splines)
+library(parallel)
+library(gbm)
+```
+
+### Download and Clean the Data
+```{r Loading and Cleaning Data}
+training <- read.csv("pml-training.csv", header=TRUE, na.strings=c("NA", "", "#DIV/0!"))
+testing <- read.csv("pml-testing.csv", header=TRUE, na.strings=c("NA", "", "#DIV/0!"))
+# Converting the values into numeric
+for(i in c(8:ncol(training)-1)){
+  training[,i]= as.numeric(as.character(training[,i]))
+  testing[,i]= as.numeric(as.character(testing[,i]))
+}
+training[is.na(training)] <-0 # Assigning 0 to all NAs
+training <- training[-c(1:7)] # Removing first 7 columns
+
+testing[is.na(testing)] <- 0
+testing <- testing[-c(1:7)]
+# Partitioning the Data
+inTrain <- createDataPartition(training$classe, p=0.6, list=FALSE)
+myTraining <- training[inTrain,]
+myTesting <- training[-inTrain,]
+```
+
+## Fitting Models
+### Model 1: Decision Tree
+```{r Decision tree}
+mod_DT <- rpart(classe ~., method="class", data=myTraining)
+fancyRpartPlot(mod_DT, main="Model 1", sub="Decision tree")
+pred_DT <- predict(mod_DT, myTesting, type="class")
+confusionMatrix(pred_DT, myTesting$classe)
+```
+
+### Model 2: Random Forest
+```{r Random Forest}
+mod_RF <- randomForest(classe ~ ., myTraining)
+plot(mod_RF, main="Model 2")
+pred_RF <- predict(mod_RF, myTesting, type="class")
+confusionMatrix(pred_RF, myTesting$classe)
+```
+
+### Model 3: Generalized Boosted Regression
+```{r}
+set.seed(543)
+fitControl <- trainControl(method = "repeatedcv",
+                           number = 3,
+                           repeats = 1)
+mod_BR <- train(classe ~., myTraining, method="gbm", trControl=fitControl, verbose = FALSE)
+plot(mod_BR, main="Model 3")
+mod_BR_final <- mod_BR$finalModel
+pred_BR <- predict(mod_BR, myTesting)
+confusionMatrix(pred_BR, myTesting$classe)
+```
+
+From the models, we can see that the Model 2 with Random Forest, has higher accuracy of 99%. Therefore, we will select Model 2 and apply the prediction on the "testing" data set.
+```{r}
+final_mod <- predict(mod_RF, testing)
+final_mod
+```
